@@ -1,0 +1,139 @@
+<?php
+use Drupal\views\ViewExecutable;
+use Drupal\Core\Render\BubbleableMetadata;
+use Drupal\node\NodeInterface;
+use Drupal\node\Entity\Node;
+use Drupal\Core\Routing\RouteObjectInterface;
+
+/**
+ * Implements hook_views_pre_render().
+ *
+ * Replaces node title and summary field with Alternate field values, if they exist
+ */
+function alternate_node_fields_views_pre_render(\Drupal\views\ViewExecutable $view) {
+  // Check if the current view is a node view and if it has results.
+  if ($view->storage->get('base_table') === 'node_field_data' && !empty($view->result)) {
+    foreach ($view->result as $row) {
+      // Check if the row is a node entity.
+      if (isset($row->_entity) && $row->_entity instanceof \Drupal\node\NodeInterface) {
+        $node = $row->_entity;
+
+        // alternate title
+        if ($node->hasField('field_alt_node_fields_title') && !$node->get('field_alt_node_fields_title')->isEmpty()) {
+          $alternate_title = $node->get('field_alt_node_fields_title')->value;
+          // Set the node title to the alternate field value.
+          $node->setTitle($alternate_title);
+        }                
+ 
+        // alternate summary feed
+  			if ($node->hasField('field_alt_node_fields_feed_summa') && !$node->get('field_alt_node_fields_feed_summa')->isEmpty()) {
+    			$alternate_summary_feed = $node->get('field_alt_node_fields_feed_summa')->value;
+    			$node->field_summary_for_feed_1->value = $alternate_summary_feed;
+  			}         
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_tokens_alter().
+ *
+ * Replaces node title token for metatags with Alternate Title value, if it exists
+ */
+function alternate_node_fields_tokens_alter(array &$replacements, array $context, BubbleableMetadata $bubbleable_metadata) {
+  // Check if we are dealing with a node context.
+  if (isset($context['data']['node']) && $context['data']['node'] instanceof NodeInterface) {
+    /** @var \Drupal\node\NodeInterface $node */
+    $node = $context['data']['node'];
+
+    if ($node->hasField('field_alt_node_fields_title') && !$node->get('field_alt_node_fields_title')->isEmpty()) {
+    	$custom_value = $node->get('field_alt_node_fields_title')->value;
+      $replacements['[node:title]'] = $custom_value;
+    }
+
+    // Add cacheability metadata if your dynamic content relies on it.
+    $bubbleable_metadata->addCacheableDependency($node);
+  }
+}
+
+/**
+ * Implements hook_preprocess_node().
+ *
+ * Replaces node title and summary field with Alternate field values, if they exist
+ */
+function alternate_node_fields_preprocess_node(&$variables) {
+  $node = $variables['node'];
+
+  // Check if the node has the alternate field and it's not empty.
+  if ($node->hasField('field_alt_node_fields_title') && !$node->get('field_alt_node_fields_title')->isEmpty()) {
+    $alternate_title = $node->get('field_alt_node_fields_title')->value;
+    $variables['label'] = $alternate_title; // This replaces the node title in node.html.twig.
+  }
+  
+  // Check if the node has the alternate summary field and it's not empty.
+  if ($node->hasField('field_alt_node_fields_feed_summa') && !$node->get('field_alt_node_fields_feed_summa')->isEmpty()) {
+    $alternate_summary_feed = $node->get('field_alt_node_fields_feed_summa')->value;
+    $variables['node']->field_summary_for_feed_1->setValue(['value' => $alternate_summary_feed]);
+   // $variables['content']['field_summary_for_feed_1'] = $alternate_summary_feed; // This replaces the node title in node.html.twig.
+  }  
+}
+
+/**
+ * Implements hook_preprocess_search_result(). 
+ *
+ * Replaces node title with Alternate Title value, if it exists
+ */
+function alternate_node_fields_preprocess_search_result(&$variables) {
+  // Get the result entity (e.g., node, user, etc.)
+  $result_entity = $variables['result']['node']; // Adjust 'node' based on the entity type
+
+  // Check if the entity and the field exist
+  if ($result_entity && $result_entity->hasField('field_alt_node_fields_title') && !$result_entity->get('field_alt_node_fields_title')->isEmpty()) {
+    $field_value = $result_entity->get('field_alt_node_fields_title')->value;
+    $variables['title'] = $field_value;
+  }
+}
+
+/**
+ * Implements hook_preprocess_breadcrumb(). 
+ *
+ * Replaces node title with Alternate Title value, if it exists
+ * !!!! needs to be fixed to work with easy breadcrumb !!!!!!
+ */
+function alternate_node_fields_preprocess_breadcrumb(&$variables){
+  $variables['#cache']['max-age'] = 0;
+
+  $request = \Drupal::request();
+  $title = '';
+  if ($route = $request->attributes->get(RouteObjectInterface::ROUTE_OBJECT)) {
+    $title = \Drupal::service('title_resolver')->getTitle($request, $route);
+  	
+  	// Replaces node title with Alternate Title value, if it exists
+  	// Get the current route match.
+		$route_match = \Drupal::routeMatch();
+    if ($node = $route_match->getParameter('node')) {
+
+  		// Check if the entity and the field exist
+  		if ($node->hasField('field_alt_node_fields_title') && !$node->get('field_alt_node_fields_title')->isEmpty()) {
+    		$field_value = $node->get('field_alt_node_fields_title')->value;
+    		$title = $field_value;
+  		}
+    }
+  }
+
+  if($variables['breadcrumb']){
+     foreach ($variables['breadcrumb'] as $key => &$value) {
+      if($value['text'] == 'Node'){
+        unset($variables['breadcrumb'][$key]);
+      }
+    }
+    if(!empty($title)){
+      $variables['breadcrumb'][] = array(
+        'text' => ''
+      );
+      $variables['breadcrumb'][] = array(
+        'text' => $title
+      );
+    }
+  }
+}

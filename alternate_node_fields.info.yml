@@ -1,0 +1,6 @@
+name: Alternate Node Fields
+type: module
+description: 'Alternate Node Fields to replace default node fields'
+package : Fields
+core_version_requirement: ^10.0
+dependencies:
